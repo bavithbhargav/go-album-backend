@@ -1,25 +1,40 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	"os"
 
-	"github.com/bavithbhargav/go-album-backend/cmd/controllers"
-	"github.com/bavithbhargav/go-album-backend/cmd/data"
+	"github.com/bavithbhargav/go-album-backend/cmd/database"
+	routers "github.com/bavithbhargav/go-album-backend/cmd/routers"
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
-	// Init inmemory albums
-	data.InitAlbums()
+	// Load envs
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal(err)
+		panic("Error loading envs")
+	}
 
-	router := gin.Default()
+	// Connect to DB
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+		os.Getenv("DB_USER"),
+		os.Getenv("DB_PASSWORD"),
+		os.Getenv("DB_HOST"),
+		os.Getenv("DB_PORT"),
+		os.Getenv("DB_NAME"),
+	)
+	database.Connect(dsn)
 
-	router.GET("/albums", controllers.GetAllAlbums)
-	router.POST("/albums", controllers.CreateAlbum)
-	router.GET("/albums/:id", controllers.GetAlbumById)
-	router.DELETE("/albums/:id", controllers.DeleteAlbum)
-	router.PATCH("/albums", controllers.EditAlbum)
+	// Migrate DB
+	database.Migrate()
+
+	r := gin.Default()
+	routers.RegisterRoutes(r)
 
 	log.Println("Server started at localhost:9090")
-	router.Run("localhost:9090")
+	r.Run("localhost:9090")
 }

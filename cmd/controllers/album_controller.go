@@ -4,33 +4,30 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/bavithbhargav/go-album-backend/cmd/data"
+	"github.com/bavithbhargav/go-album-backend/cmd/database"
 	"github.com/bavithbhargav/go-album-backend/cmd/models"
-	"github.com/bavithbhargav/go-album-backend/cmd/utils"
 	"github.com/gin-gonic/gin"
 )
 
 func GetAllAlbums(c *gin.Context) {
-	c.IndentedJSON(http.StatusOK, data.Albums)
+	var albums []models.Album
+	database.Instance.Find(&albums)
+	c.IndentedJSON(http.StatusOK, albums)
 }
 
 func DeleteAlbum(c *gin.Context) {
 	albumId := c.Param("id")
 
-	for i, album := range data.Albums {
-		if album.ID == albumId {
-			data.Albums = append(data.Albums[:i], data.Albums[i+1:]...)
-			c.IndentedJSON(http.StatusOK, data.Albums)
-			return
-		}
+	if err := database.Instance.Delete(&models.Album{}, albumId).Error; err != nil {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "Requested album not found"})
+		return
 	}
 
-	c.IndentedJSON(http.StatusNotFound, gin.H{"message": "Requested album not found"})
+	c.IndentedJSON(http.StatusNoContent, gin.H{"message": "Album deleted"})
 }
 
 func CreateAlbum(c *gin.Context) {
 	var newAlbum models.Album
-	newAlbum.ID = utils.Random3DigitString()
 
 	if err := c.BindJSON(&newAlbum); err != nil {
 		log.Println("Error receiving http body", err)
@@ -38,39 +35,36 @@ func CreateAlbum(c *gin.Context) {
 		return
 	}
 
-	data.Albums = append(data.Albums, newAlbum)
+	database.Instance.Save(&newAlbum)
 	c.IndentedJSON(http.StatusCreated, newAlbum)
 }
 
 func GetAlbumById(c *gin.Context) {
 	albumId := c.Param("id")
 
-	for i, album := range data.Albums {
-		if album.ID == albumId {
-			c.IndentedJSON(http.StatusOK, data.Albums[i])
-			return
-		}
-	}
-
-	c.IndentedJSON(http.StatusNotFound, gin.H{"message": "Requested album not found"})
-}
-
-func EditAlbum(c *gin.Context) {
-	var updateAlbum models.Album
-
-	if err := c.BindJSON(&updateAlbum); err != nil {
-		log.Println("Error receiving http body", err)
-		c.IndentedJSON(http.StatusBadRequest, gin.H{"message": "Error receiving http body"})
+	var album models.Album
+	if err := database.Instance.First(&album, albumId).Error; err != nil {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "Requested album not found"})
 		return
 	}
 
-	for i, album := range data.Albums {
-		if album.ID == updateAlbum.ID {
-			data.Albums[i] = updateAlbum
-			c.IndentedJSON(http.StatusOK, data.Albums[i])
-			return
-		}
+	c.IndentedJSON(http.StatusOK, album)
+}
+
+func EditAlbum(c *gin.Context) {
+	id := c.Param("id")
+	var album models.Album
+
+	if err := database.Instance.First(&album, id).Error; err != nil {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"error": "Album not found"})
+		return
 	}
 
-	c.IndentedJSON(http.StatusNotFound, gin.H{"message": "Requested album not found"})
+	if err := c.ShouldBindJSON(&album); err != nil {
+		c.IndentedJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	database.Instance.Save(&album)
+	c.IndentedJSON(http.StatusOK, album)
 }
