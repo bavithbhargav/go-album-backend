@@ -18,11 +18,13 @@ func GetAllAlbums(c *gin.Context) {
 func DeleteAlbum(c *gin.Context) {
 	albumId := c.Param("id")
 
-	if err := database.Instance.Delete(&models.Album{}, albumId).Error; err != nil {
+	_, exists := checkIfAlbumExists(albumId)
+	if !exists {
 		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "Requested album not found"})
 		return
 	}
 
+	database.Instance.Delete(&models.Album{}, albumId)
 	c.IndentedJSON(http.StatusNoContent, gin.H{"message": "Album deleted"})
 }
 
@@ -42,29 +44,40 @@ func CreateAlbum(c *gin.Context) {
 func GetAlbumById(c *gin.Context) {
 	albumId := c.Param("id")
 
-	var album models.Album
-	if err := database.Instance.First(&album, albumId).Error; err != nil {
+	album, exists := checkIfAlbumExists(albumId)
+	if !exists {
 		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "Requested album not found"})
 		return
 	}
 
-	c.IndentedJSON(http.StatusOK, album)
+	c.IndentedJSON(http.StatusOK, *album)
 }
 
 func EditAlbum(c *gin.Context) {
-	id := c.Param("id")
-	var album models.Album
+	var updateAlbum models.Album
 
-	if err := database.Instance.First(&album, id).Error; err != nil {
-		c.IndentedJSON(http.StatusNotFound, gin.H{"error": "Album not found"})
-		return
-	}
-
-	if err := c.ShouldBindJSON(&album); err != nil {
+	if err := c.ShouldBindJSON(&updateAlbum); err != nil {
 		c.IndentedJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	database.Instance.Save(&album)
-	c.IndentedJSON(http.StatusOK, album)
+	_, exists := checkIfAlbumExists(updateAlbum.ID)
+	if !exists {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"error": "Album not found"})
+		return
+	}
+
+	database.Instance.Save(&updateAlbum)
+	c.IndentedJSON(http.StatusOK, updateAlbum)
+}
+
+func checkIfAlbumExists(albumId any) (*models.Album, bool) {
+	var album models.Album
+
+	database.Instance.First(&album, albumId)
+	if album.ID == 0 {
+		return &models.Album{}, false
+	}
+
+	return &album, true
 }
